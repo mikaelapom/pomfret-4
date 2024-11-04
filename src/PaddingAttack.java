@@ -122,57 +122,46 @@ public class PaddingAttack {
    */
   public static String recoverPlaintext(ArrayList<Block> blocks) {
 
-    byte[] ptext = new byte[(blocks.size() - 1) * 16]; // this will hold plaintext that we build
+    // build return string
+    StringBuilder plaintext = new StringBuilder();
 
-    // i indicates which block you are on
+    // i loops through blocks
     for (int i = 1; i < blocks.size(); i++) {
-      Block cPrime = blocks.get(i); // this is current block
       Block c = blocks.get(i - 1); // this is previous block
+      Block dec = new Block(); // message holder
 
-      // byte[] T = c.toArray(); // modified c block
-      byte[] T = new byte[16];
-      byte[] decryption = new byte[16];
-
-      // start from last byte
+      // start from last byte, use the length to find the val of padding
       for (int j = 15; j >= 0; j--) {
         byte padVal = (byte) (16 - j); // padding value (cant be more than the length)
+        Block T = new Block(c.toArray()); // modified c block
 
         // modify T
         for (int k = 15; k > j; k--) {
-          T[k] = (byte) (padVal ^ T[k] ^ decryption[k]);
-
+          byte newB = (byte) (padVal ^ T.getByte(k) ^ dec.getByte(k));
+          T = T.setByte(k, newB);
         }
 
         // guess T against 256 possibilities
         for (int x = 0; x < 256; x++) {
           int guess = x;
-          T[i] = (byte) guess;
+          T = T.setByte(j, (byte) guess);
 
-          ArrayList<Block> TC = new ArrayList<>(blocks);
-          TC.set(i - 1, new Block(T));
+          // block together T for (T||c')
+          ArrayList<Block> newT = new ArrayList<>(blocks);
+          newT.set(i - 1, T);
 
-          if (oracle.decrypt(TC)) {
-            decryption[j] = (byte) (c.getByte(j) ^ padVal ^ T[j]); // ptext byte stored in decryption array
+          if (oracle.decrypt(newT)) {
+            Byte txt = (byte) (guess ^ c.getByte(j) ^ padVal); // T xor c xor 1...
+            dec = dec.setByte(j, txt); // build m
             break;
-            // ptext[j] = (byte) (guess ^ c.getByte(j) ^ padVal);
           }
-
         }
-
       }
-      System.arraycopy(decryption, 0, ptext, (i - 1) * 16, 16);
+
+      plaintext.append(new String(dec.toArray()));
 
     }
-    return new String(ptext, StandardCharsets.UTF_8).trim(); // Convert byte array to String
-
-    /*
-     * StringBuilder plaintext = new StringBuilder();
-     * for (byte i : ptext) {
-     * plaintext.append((char) i);
-     * }
-     * 
-     * return plaintext.toString();
-     */
+    return plaintext.toString();
 
   }
 
